@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ~ Copyright (c) 2019 - Oak Chen <oak@sfysoft.com>
+  ~ 2019-07-31 Oak Chen
+  -->
+
+<resources>
+    <string name="app_name">脱壳</string>
+    <string name="description">从加固过的应用中提取dex文件，适用于百度、360、腾讯、梆梆等提供的免费版加固工具</string>
+</resources>

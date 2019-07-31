@@ -1,0 +1,9 @@
+<!--
+  ~ Copyright (c) 2019 - Oak Chen <oak@sfysoft.com>
+  ~ 2019-07-26 Oak Chen
+  -->
+
+<resources>
+    <string name="app_name">Shelling</string>
+    <string name="description">Dump dex from app protected by free tools from baidu, 360, tencent, bangcle.com</string>
+</resources>
