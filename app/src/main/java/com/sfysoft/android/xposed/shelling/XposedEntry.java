@@ -5,6 +5,7 @@
 
 package com.sfysoft.android.xposed.shelling;
 
+import android.annotation.SuppressLint;
 import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedBridge;
@@ -45,7 +46,8 @@ public class XposedEntry implements IXposedHookLoadPackage {
     /**
      * 拟脱壳的App包名，对应AndroidManifests.xml里的<manifest package的值
      */
-    private static final String targetPackage = "com.sfysoft.shellingtest";
+    private static final String[] targetPackages =
+            new String[]{"com.sfysoft.shellingtest", "com.sfysoft.shellingtest2"};
 
     private static void log(String text) {
         XposedBridge.log(text);
@@ -57,8 +59,18 @@ public class XposedEntry implements IXposedHookLoadPackage {
 
     @Override
     public void handleLoadPackage(XC_LoadPackage.LoadPackageParam lpparam) {
-        log("Load package: " + lpparam.packageName);
-        if (!lpparam.packageName.equals(targetPackage)) {
+        String packageName = lpparam.packageName;
+        log("Load package: " + packageName);
+
+        boolean found = false;
+        for (String targetPackage : targetPackages) {
+            if (packageName.equals(targetPackage)) {
+                found = true;
+                break;
+            }
+        }
+
+        if (!found) {
             return;
         }
 
@@ -68,7 +80,7 @@ public class XposedEntry implements IXposedHookLoadPackage {
                 log("Found " + application);
                 ClassLoaderHook hook;
                 try {
-                    hook = new ClassLoaderHook(getSavingPath(targetPackage));
+                    hook = new ClassLoaderHook(getSavingPath(packageName));
                     XposedHelpers.findAndHookMethod("java.lang.ClassLoader", lpparam.classLoader,
                                                     "loadClass", String.class, boolean.class, hook);
                 } catch (NoSuchMethodException | ClassNotFoundException e) {
@@ -79,6 +91,8 @@ public class XposedEntry implements IXposedHookLoadPackage {
         }
     }
 
+    @SuppressWarnings("SameParameterValue")
+    @SuppressLint("SdCardPath")
     private String getSavingPath(String packageName) {
         return "/data/data/" + packageName;
     }
@@ -88,6 +102,7 @@ public class XposedEntry implements IXposedHookLoadPackage {
         private Method getDex;
         private Method getBytes;
 
+        @SuppressLint("PrivateApi")
         ClassLoaderHook(String dexSavingPath) throws ClassNotFoundException, NoSuchMethodException {
             // libcore/dex/src/main/java/com/android/dex/Dex.java(Android 5.1.1)
             getBytes = Class.forName("com.android.dex.Dex").getDeclaredMethod("getBytes");
@@ -102,11 +117,13 @@ public class XposedEntry implements IXposedHookLoadPackage {
             if (className == null) {
                 return true;
             }
-            if (className.startsWith("java")) {
-                return true;
-            }
-            if (className.startsWith("android")) {
-                return true;
+
+            String[] skippedClassPrefixes = new String[]{"java", "android"};
+
+            for (String prefix : skippedClassPrefixes) {
+                if (className.startsWith(prefix)) {
+                    return true;
+                }
             }
 
             return false;
@@ -124,30 +141,21 @@ public class XposedEntry implements IXposedHookLoadPackage {
             }
 
             Object dex;
-            byte[] bytes = null;
             try {
                 dex = getDex.invoke(cls);
-                if (dex != null) {
-                    bytes = (byte[]) getBytes.invoke(dex);
-                }
             } catch (IllegalAccessException | InvocationTargetException e) {
                 log(e);
                 return;
             }
 
-            int length = 0;
-            if (bytes != null) {
-                length = bytes.length;
-            }
-
             if (DEBUG) {
-                log("loadClass " + cls.getName() + ", Dex: " + dex + ", length: " + length);
+                log("loadClass " + cls.getName() + ", Dex: " + dex);
             }
 
-            dexOutputTask.write(dex, bytes);
+            dexOutputTask.write(dex);
         }
 
-        private static class DexOutputTask implements Runnable {
+        private class DexOutputTask implements Runnable {
             // 字节码缓存，不立即写文件，避免写文件太慢导致ANR
             private final Queue<byte[]> byteSet = new LinkedList<>();
             // 跟踪哪些类已经解码过，避免重复写到文件中
@@ -164,7 +172,8 @@ public class XposedEntry implements IXposedHookLoadPackage {
                 this(savingDirectory, 300000);
             }
 
-            DexOutputTask(String savingDirectory, long idleMsToQuit) {
+            DexOutputTask(String savingDirectory,
+                          @SuppressWarnings("SameParameterValue") long idleMsToQuit) {
                 this.savingDirectory = savingDirectory;
                 this.idleMsToQuit = idleMsToQuit;
             }
@@ -204,7 +213,7 @@ public class XposedEntry implements IXposedHookLoadPackage {
                     }
 
                     i++;
-                    String targetFile =
+                    @SuppressLint("DefaultLocale") String targetFile =
                             savingDirectory + String.format("/%05d-%02d.dex", threadId, i);
                     log("Thread: " + threadId + ", File: " + targetFile);
                     try (FileOutputStream fileOutputStream = new FileOutputStream(targetFile)) {
@@ -224,8 +233,8 @@ public class XposedEntry implements IXposedHookLoadPackage {
                 savingDirectory = null;
             }
 
-            void write(Object dex, byte[] bytes) {
-                if (dex == null || bytes == null) {
+            void write(Object dex) {
+                if (dex == null) {
                     return;
                 }
 
@@ -240,6 +249,18 @@ public class XposedEntry implements IXposedHookLoadPackage {
                         return;
                     }
                     dexSet.add(dex);
+                }
+
+                byte[] bytes;
+                try {
+                    bytes = (byte[]) getBytes.invoke(dex);
+                } catch (IllegalAccessException | InvocationTargetException e) {
+                    log(e);
+                    return;
+                }
+
+                if (bytes == null) {
+                    return;
                 }
 
                 synchronized (byteSet) {
