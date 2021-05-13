@@ -6,11 +6,6 @@
 package com.sfysoft.android.xposed.shelling;
 
 import android.annotation.SuppressLint;
-import de.robv.android.xposed.IXposedHookLoadPackage;
-import de.robv.android.xposed.XC_MethodHook;
-import de.robv.android.xposed.XposedBridge;
-import de.robv.android.xposed.XposedHelpers;
-import de.robv.android.xposed.callbacks.XC_LoadPackage;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -22,6 +17,12 @@ import java.util.LinkedList;
 import java.util.Queue;
 import java.util.Set;
 
+import de.robv.android.xposed.IXposedHookLoadPackage;
+import de.robv.android.xposed.XC_MethodHook;
+import de.robv.android.xposed.XposedBridge;
+import de.robv.android.xposed.XposedHelpers;
+import de.robv.android.xposed.callbacks.XC_LoadPackage;
+
 /**
  * Xposed entry to shelling app
  *
@@ -29,25 +30,23 @@ import java.util.Set;
  */
 public class XposedEntry implements IXposedHookLoadPackage {
     private static final boolean DEBUG = false;
-    /**
-     * 加固应用的初始类，对应AndroidManifests.xml里的<application android:name的值
-     * com.stub.StubApp 360加固
-     * s.h.e.l.l.S 爱加密
-     * com.secneo.apkwrapper.ApplicationWrapper 梆梆加固
-     * com.SecShell.SecShell.ApplicationWrapper 梆梆加固
-     * com.tencent.StubShell.TxAppEntry 腾讯乐固
-     * com.baidu.protect.StubApplication 百度加固
-     */
-    private static final String[] PACKED_APP_ENTRIES =
-            {"com.stub.StubApp", "s.h.e.l.l.S", "com.secneo.apkwrapper.ApplicationWrapper",
-             "com.SecShell.SecShell.ApplicationWrapper", "com.tencent.StubShell.TxAppEntry",
-             "com.baidu.protect.StubApplication"};
+    // 加固应用的初始类，对应AndroidManifests.xml里的<application android:name的值
+    // @formatter:off
+    private static final String[] PACKED_APP_ENTRIES = {
+        "com.stub.StubApp",                             // 360加固
+        "s.h.e.l.l.S",                                  // 爱加密
+        "com.secneo.apkwrapper.ApplicationWrapper",     // 梆梆加固
+        "com.SecShell.SecShell.ApplicationWrapper",     // 梆梆加固
+        "com.secneo.apkwrapper.AW",                     // 梆梆加固
+        "com.tencent.StubShell.TxAppEntry",             // 腾讯乐固
+        "com.baidu.protect.StubApplication"             // 百度加固
+    };
 
-    /**
-     * 拟脱壳的App包名，对应AndroidManifests.xml里的<manifest package的值
-     */
-    private static final String[] targetPackages =
-            new String[]{"com.sfysoft.shellingtest", "com.sfysoft.shellingtest2"};
+    // 拟脱壳的App包名，对应AndroidManifests.xml里的<manifest package的值
+    private static final String[] targetPackages = {
+        "com.sfysoft.shellingtest"
+    };
+    // @formatter:on
 
     private static void log(String text) {
         XposedBridge.log(text);
@@ -104,9 +103,10 @@ public class XposedEntry implements IXposedHookLoadPackage {
 
         @SuppressLint("PrivateApi")
         ClassLoaderHook(String dexSavingPath) throws ClassNotFoundException, NoSuchMethodException {
-            // libcore/dex/src/main/java/com/android/dex/Dex.java(Android 5.1.1)
+            // 实现限制: 已知Android 5.1.1~7.1.2 同时有下列2个方法，更高版本没有了getDex方法，不可使用
+            // libcore/dex/src/main/java/com/android/dex/Dex.java
             getBytes = Class.forName("com.android.dex.Dex").getDeclaredMethod("getBytes");
-            // libcore/libart/src/main/java/java/lang/Class.java(Android 5.1.1)
+            // libcore/libart/src/main/java/java/lang/Class.java
             // noinspection JavaReflectionMemberAccess
             getDex = Class.forName("java.lang.Class").getDeclaredMethod("getDex");
             dexOutputTask = new DexOutputTask(dexSavingPath);
@@ -214,7 +214,7 @@ public class XposedEntry implements IXposedHookLoadPackage {
 
                     i++;
                     @SuppressLint("DefaultLocale") String targetFile =
-                            savingDirectory + String.format("/%05d-%02d.dex", threadId, i);
+                        savingDirectory + String.format("/%05d-%02d.dex", threadId, i);
                     log("Thread: " + threadId + ", File: " + targetFile);
                     try (FileOutputStream fileOutputStream = new FileOutputStream(targetFile)) {
                         fileOutputStream.write(bytes);
